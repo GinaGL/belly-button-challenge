@@ -153,6 +153,7 @@ function drawBubbleChart(idNum) {
   // Plot the chart to a div tag with id "bubble-plot"
   Plotly.newPlot("bubble", bubbleData, bubbleLayout);
 }
+
 // Draw the gauge chart
 function drawGaugeChart(idNum) {
   // Log a change
@@ -160,89 +161,99 @@ function drawGaugeChart(idNum) {
 
   // Just grab the one ID we want
   var metadataFilter = data.metadata.filter(item => item["id"] == idNum);
-  var washFrequency = metadataFilter[0].wfreq;
+  var level = metadataFilter[0].wfreq;
+  var offset = [ 0, 0, 3, 3, 1, -0.5, -2, -3, 0, 0];
 
-  // Create the data array for the plot
-  var gaugeData = [
-    {
-      type: "indicator",
-      mode: "gauge+number",
-      value: washFrequency,
-      title: { text: "Belly Button Washing Frequency<br>Scrubs per Week" },
-      gauge: {
-        axis: { range: [0, 9], tickwidth: 1, tickcolor: "darkblue" },
-        bar: { color: "darkblue" },
-        bgcolor: "white",
-        borderwidth: 2,
-        bordercolor: "gray",
-        steps: [
-          { range: [0, 1], color: "#f7fcf5" },
-          { range: [1, 2], color: "#e5f5e0" },
-          { range: [2, 3], color: "#c7e9c0" },
-          { range: [3, 4], color: "#a1d99b" },
-          { range: [4, 5], color: "#74c476" },
-          { range: [5, 6], color: "#41ab5d" },
-          { range: [6, 7], color: "#238b45" },
-          { range: [7, 8], color: "#006d2c" },
-          { range: [8, 9], color: "#00441b" }
-        ],
-        threshold: {
-          line: { color: "red", width: 4 },
-          thickness: 0.75,
-          value: washFrequency
-        }
-      }
-    }
-  ];
+  // Calc the meter point
+  var degrees = 180 - (level * 20 + offset[level]);
+  var height = .6;
+  var widthby2 = .05;
+  var radians = degrees * Math.PI / 180;
+  var radiansBaseL = (90 + degrees) * Math.PI / 180;
+  var radiansBaseR = (degrees - 90) * Math.PI / 180;
+  var xHead = height * Math.cos(radians);
+  var yHead = height * Math.sin(radians);
+  var xTail0 = widthby2 * Math.cos(radiansBaseL);
+  var yTail0 = widthby2 * Math.sin(radiansBaseL);
+  var xTail1 = widthby2 * Math.cos(radiansBaseR);
+  var yTail1 = widthby2 * Math.sin(radiansBaseR);
 
-  // Define the plot layout
-  var gaugeLayout = {
-    width: 500,
-    height: 400,
-    margin: { t: 25, r: 25, l: 25, b: 25 }
+  // Create the triangle for the meter
+  var triangle = `M ${xTail0} ${yTail0} L ${xTail1} ${yTail1} L ${xHead} ${yHead} Z`;
+
+  // Create the traceData variable
+  var traceData = [{
+                      type: 'scatter',
+                      x: [0],
+                      y: [0],
+                      marker: {size: 16, color: '#850000'},
+                      showlegend: false,
+                      name: 'frequency',
+                      text: level,
+                      hoverinfo: 'text+name'},
+                  {   values: [180/9, 180/9, 180/9, 180/9, 180/9, 180/9, 180/9, 180/9, 180/9, 180],
+                      rotation: 90,
+                      text: ['8-9','7-8','6-7','5-6', '4-5', '3-4', '2-3', '1-2', '0-1', ''],
+                      textinfo: 'text',
+                      textposition: 'inside',
+                      marker: {colors: [  '#84B589', '#89BB8F', '#8CBF88', '#B7CC92', '#D5E49D',
+                                          '#E5E7B3', '#E9E6CA', '#F4F1E5', '#F8F3EC', '#FFFFFF',]},
+                      labels: ['8-9','7-8','6-7','5-6', '4-5', '3-4', '2-3', '1-2', '0-1', ''],
+                      hoverinfo: 'label',
+                      hole: .5,
+                      type: 'pie',
+                      showlegend: false
+  }];
+
+  // Define the Layout
+  var layout = {
+                  shapes:[{ type: 'path', path: triangle, fillcolor: '#850000', line: { color: '#850000' } }],
+                  title: '<b>Belly Button Wash Frequency</b><br>Scrubs per Week',
+                  xaxis: {zeroline: false, showticklabels: false, showgrid: false, range: [-1, 1]},
+                  yaxis: {zeroline: false, showticklabels: false, showgrid: false, range: [-1, 1]}
   };
-
-  // Plot the chart to a div tag with id "gauge-plot"
-  Plotly.newPlot("gauge", gaugeData, gaugeLayout);
+  Plotly.newPlot('gauge', traceData, layout);
 }
 
+// Initialization: do the load on the data, set up the menu, and draw the initial graphs
+function initialization () {
+  d3.json("./data/samples.json").then(function(jsonData) {
+      console.log("Gathering Data");
+      data = jsonData;
+      console.log("Keys: " + Object.keys(data));
+      names = data.names;
 
-// Function to handle changes in the dropdown selection
-function optionChanged(selectedId) {
-  // Log a change
-  console.log("Option: " + selectedId);
+      // Create the Test Subject ID No. Selector
+      names.forEach(element => { inputSelector.append("option").text(element).property("value", element); });
 
-  // Call the functions to draw the charts and populate the demographic info panel
-  populateDemoInfo(selectedId);
-  drawBarPlot(selectedId);
-  drawBubbleChart(selectedId);
-  drawGaugeChart(selectedId);
-}
+      // Populate the Demo Info Panel
+      var idNum = names[0];
+      populateDemoInfo(idNum);
 
-// Function to initialize the dashboard
-function init() {
-  // Load the data
-  d3.json("samples.json").then(function (jsonData) {
-    // Store the data in the global variable
-    data = jsonData;
+      // Draw the Bar Plot
+      drawBarPlot(idNum);
 
-    // Populate the dropdown menu with IDs
-    var ids = data.names;
-    ids.forEach(function (id) {
-      inputSelector.append("option").text(id).property("value", id);
-    });
+      // Draw the Bubble Chart
+      drawBubbleChart(idNum);
 
-    // Initialize the dashboard with the first ID
-    var firstId = ids[0];
-    populateDemoInfo(firstId);
-    drawBarPlot(firstId);
-    drawBubbleChart(firstId);
-    drawGaugeChart(firstId);
+      // Draw the Gauge Chart
+      drawGaugeChart(idNum);
   });
 }
 
-// Initialize the dashboard
-init();
+initialization();
 
+function optionChanged(idNum) {
+  // Update the Demographic Info Panel
+  populateDemoInfo(idNum);
 
+  // Draw the Bar Plot
+  drawBarPlot(idNum);
+
+  // Draw the Bubble Chart
+  drawBubbleChart(idNum);
+
+  // Draw the Gauge Chart
+  drawGaugeChart(idNum);
+};
 
